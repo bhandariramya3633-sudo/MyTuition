@@ -214,3 +214,7 @@ Made with ❤️ by [Mohit Raj](https://github.com/mohitraj8503)
 **MyTuition v2.0** — *Empowering educators, inspiring students.*
 
 </div>
+
+---
+
+Built by [Mohit Raj](https://github.com/mohitraj8503) — Technical Team Lead @ [Tech Tomorrow](https://techtomorrow.in)
