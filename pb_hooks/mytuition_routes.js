@@ -583,13 +583,55 @@ routerAdd("POST", "/api/mytuition/mark-attendance", (c) => {
     const body = $apis.requestInfo(c).data || {}
     const sessionId = body.sessionId
     const attendanceMap = body.attendanceMap || {} // { [studentId]: "PRESENT"|"ABSENT"|"LATE" }
-    
     if (!sessionId) return c.json(400, { error: "sessionId is required" })
-    
-    const attCol = $app.findCollectionByNameOrId("attendance")
-    let markedCount = 0
+
+let sessionRecord = null
+try {
+    sessionRecord = $app.findRecordById("class_sessions", sessionId)
+} catch (_) {
+    return c.json(404, { error: "Class session not found" })
+}
+
+const sessionTeacherId = sessionRecord.get("teacher")
+const sessionBatchId = sessionRecord.get("batch")
+
+if (!sessionBatchId) {
+    return c.json(400, { error: "Class session is not linked to a batch" })
+}
+
+if (authRecord.get("role") === "TEACHER" && sessionTeacherId !== authRecord.getId()) {
+    return c.json(403, { error: "You cannot mark attendance for another teacher's session" })
+}
+
+const attCol = $app.findCollectionByNameOrId("attendance")
+let markedCount = 0
+const absentStudentIds = []
     
     for (const [studentId, status] of Object.entries(attendanceMap)) {
+        if (!["PRESENT", "ABSENT", "LATE", "EXCUSED"].includes(status)) {
+    continue
+}
+
+let studentRecord = null
+try {
+    studentRecord = $app.findRecordById("users", studentId)
+} catch (_) {
+    continue
+}
+
+if (studentRecord.get("role") !== "STUDENT") {
+    continue
+}
+
+const studentInstituteId = studentRecord.get("institute")
+const studentBatches = studentRecord.get("batches") || []
+
+if (
+    studentInstituteId !== authRecord.get("institute") ||
+    !studentBatches.includes(sessionBatchId)
+) {
+    continue
+}
         try {
             let record = null
             try {
@@ -606,13 +648,33 @@ routerAdd("POST", "/api/mytuition/mark-attendance", (c) => {
             record.set("date", new Date().toISOString().split("T")[0])
             $app.save(record)
             markedCount++
+
+            if (status === "ABSENT") {
+                 absentStudentIds.push(studentId)
+            }
         } catch (_) {}
     }
 
     // Send OneSignal push to absent students' parents
-    const absentStudentIds = Object.entries(attendanceMap)
-        .filter(([_, status]) => status === "ABSENT")
-        .map(([studentId, _]) => studentId)
+   const absentStudentIds = []
+
+for (const [studentId, status] of Object.entries(attendanceMap)) {
+    if (status !== "ABSENT") continue
+
+    try {
+        const studentRecord = $app.findRecordById("users", studentId)
+        const studentInstituteId = studentRecord.get("institute")
+        const studentBatches = studentRecord.get("batches") || []
+
+        if (
+            studentRecord.get("role") === "STUDENT" &&
+            studentInstituteId === authRecord.get("institute") &&
+            studentBatches.includes(sessionBatchId)
+        ) {
+            absentStudentIds.push(studentId)
+        }
+    } catch (_) {}
+}
     
     if (absentStudentIds.length > 0) {
         sendOneSignalNotification(
