@@ -1,6 +1,13 @@
 /// <reference path="../pb_data/types.d.ts" />
 
 // ==========================================
+// Generate a random temporary student password
+// ==========================================
+function generateStudentPassword() {
+    return $security.randomString(12)
+}
+
+// ==========================================
 // 1. REGISTER STUDENT (Teacher Gatekeeper)
 // POST /api/mytuition/register-student
 // ==========================================
@@ -77,8 +84,7 @@ try {
     
     // Generate simple memorable password
     const firstName = name.split(" ")[0].toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 8)
-    const password = customPassword || `${firstName}@123`
-    
+    const password = customPassword || generateStudentPassword()
     // Create student user record in users auth collection
     const usersCol = $app.findCollectionByNameOrId("users")
     const student = new Record(usersCol)
@@ -842,7 +848,7 @@ routerAdd("POST", "/api/mytuition/reset-password/:studentId", (c) => {
 
     const newPass = body.newPassword
         ? String(body.newPassword).trim()
-        : `${firstName}@123`
+        : generateStudentPassword()
 
     if (newPass.length < 8) {
         return c.json(400, { error: "Password must contain at least 8 characters" })
